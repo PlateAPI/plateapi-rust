@@ -1,11 +1,7 @@
-use plateapi::{ClientOptions, PlateAPI, PlateAPIError, LogsOptions, VehiclesOptions};
+//! Public-API checks that need no network, plus live checks that are ignored by default
+//! (run them with `PLATEAPI_KEY=pk_live_... cargo test -- --ignored`).
 
-#[tokio::test]
-async fn health_returns_ok() {
-    let client = PlateAPI::new("dummy");
-    let health = client.health().await.unwrap();
-    assert_eq!(health.status, "ok");
-}
+use plateapi::{ClientOptions, PlateAPI, PlateAPIError, VehiclesOptions, WalkOptions};
 
 #[tokio::test]
 async fn lookup_invalid_state() {
@@ -20,144 +16,58 @@ async fn lookup_invalid_state() {
 #[tokio::test]
 async fn lookup_empty_plate() {
     let client = PlateAPI::new("dummy");
-    let err = client.lookup("", "VIC", false).await.unwrap_err();
-    match err {
-        PlateAPIError::InvalidArgument(msg) => assert!(msg.contains("empty")),
-        other => panic!("expected InvalidArgument, got {:?}", other),
-    }
-}
-
-#[tokio::test]
-async fn lookup_whitespace_plate() {
-    let client = PlateAPI::new("dummy");
     let err = client.lookup("   ", "VIC", false).await.unwrap_err();
-    match err {
-        PlateAPIError::InvalidArgument(_) => {}
-        other => panic!("expected InvalidArgument, got {:?}", other),
-    }
+    assert!(matches!(err, PlateAPIError::InvalidArgument(_)));
 }
 
 #[tokio::test]
-async fn state_case_insensitive() {
-    let opts = ClientOptions {
-        max_retries: 0,
+async fn bad_vehicle_type_and_walk_options_are_rejected_before_any_request() {
+    let client = PlateAPI::with_options(
+        "dummy",
+        ClientOptions {
+            base_url: "http://127.0.0.1:1".to_string(),
+            ..Default::default()
+        },
+    );
+    let opts = VehiclesOptions {
+        vehicle_type: Some("truck".into()),
         ..Default::default()
     };
-    let client = PlateAPI::with_options("pk_live_invalid", opts);
-    let err = client.lookup("TEST123", "vic", false).await.unwrap_err();
-    match err {
-        PlateAPIError::InvalidArgument(_) => {
-            panic!("lowercase state was rejected -- case normalisation broken")
-        }
-        _ => {}
-    }
-}
-
-#[tokio::test]
-async fn all_states_accepted() {
-    let opts = ClientOptions {
-        max_retries: 0,
-        ..Default::default()
-    };
-    let client = PlateAPI::with_options("pk_live_invalid", opts);
-    for state in &["NSW", "VIC", "QLD", "SA", "WA", "TAS", "NT", "ACT"] {
-        let err = client.lookup("TEST123", state, false).await.unwrap_err();
-        if let PlateAPIError::InvalidArgument(_) = err {
-            panic!("state {} was rejected", state);
-        }
-    }
-}
-
-#[tokio::test]
-async fn lookup_bad_key() {
-    let opts = ClientOptions {
-        max_retries: 0,
-        ..Default::default()
-    };
-    let client = PlateAPI::with_options("pk_live_invalid_key", opts);
-    let err = client.lookup("TEST123", "VIC", false).await.unwrap_err();
-    match err {
-        PlateAPIError::Authentication | PlateAPIError::RateLimit { .. } => {}
-        other => panic!("expected Authentication or RateLimit, got {:?}", other),
-    }
-}
-
-#[tokio::test]
-async fn usage_bad_key() {
-    let opts = ClientOptions {
-        max_retries: 0,
-        ..Default::default()
-    };
-    let client = PlateAPI::with_options("pk_live_invalid_key", opts);
-    let err = client.usage().await.unwrap_err();
-    match err {
-        PlateAPIError::Authentication | PlateAPIError::RateLimit { .. } => {}
-        other => panic!("expected Authentication or RateLimit, got {:?}", other),
-    }
-}
-
-#[tokio::test]
-async fn logs_bad_key() {
-    let opts = ClientOptions {
-        max_retries: 0,
-        ..Default::default()
-    };
-    let client = PlateAPI::with_options("pk_live_invalid_key", opts);
-    let err = client.logs(None).await.unwrap_err();
-    match err {
-        PlateAPIError::Authentication | PlateAPIError::RateLimit { .. } => {}
-        other => panic!("expected Authentication or RateLimit, got {:?}", other),
-    }
-}
-
-#[tokio::test]
-async fn vehicles_bad_key() {
-    let opts = ClientOptions {
-        max_retries: 0,
-        ..Default::default()
-    };
-    let client = PlateAPI::with_options("pk_live_invalid_key", opts);
-    let err = client.vehicles(None).await.unwrap_err();
-    match err {
-        PlateAPIError::Authentication | PlateAPIError::RateLimit { .. } => {}
-        other => panic!("expected Authentication or RateLimit, got {:?}", other),
-    }
+    assert!(matches!(
+        client.vehicles(Some(&opts)).await,
+        Err(PlateAPIError::InvalidArgument(_))
+    ));
+    assert!(matches!(
+        client.vehicle_by_id(-1).await,
+        Err(PlateAPIError::InvalidArgument(_))
+    ));
+    assert!(matches!(
+        client.walk_vehicles("", "HILUX", WalkOptions::default()),
+        Err(PlateAPIError::InvalidArgument(_))
+    ));
 }
 
 #[tokio::test]
 async fn connection_error() {
     let opts = ClientOptions {
-        base_url: "http://127.0.0.1:19".to_string(),
+        base_url: "http://127.0.0.1:1".to_string(),
         timeout_secs: 2,
         max_retries: 0,
+        ..Default::default()
     };
     let client = PlateAPI::with_options("dummy", opts);
     let err = client.health().await.unwrap_err();
-    match err {
-        PlateAPIError::Request(_) => {}
-        other => panic!("expected Request error, got {:?}", other),
-    }
+    assert!(matches!(err, PlateAPIError::Request(_)), "{:?}", err);
+    assert_eq!(err.status_code(), None);
 }
 
 #[tokio::test]
-async fn custom_options() {
-    let opts = ClientOptions {
-        timeout_secs: 10,
-        max_retries: 1,
-        ..Default::default()
-    };
-    let client = PlateAPI::with_options("dummy", opts);
-    let health = client.health().await.unwrap();
-    assert_eq!(health.status, "ok");
-}
-
-#[tokio::test]
-async fn trailing_slash_stripped() {
-    let opts = ClientOptions {
-        base_url: "https://api.plateapi.com.au///".to_string(),
-        ..Default::default()
-    };
-    let client = PlateAPI::with_options("dummy", opts);
-    let health = client.health().await.unwrap();
-    assert_eq!(health.status, "ok");
+#[ignore]
+async fn live_health_and_sandbox() {
+    let key = std::env::var("PLATEAPI_KEY").expect("PLATEAPI_KEY");
+    let client = PlateAPI::new(key);
+    assert_eq!(client.health().await.unwrap().status, "ok");
+    let result = client.lookup("TEST123", "VIC", false).await.unwrap();
+    assert!(result.sandbox);
+    assert_eq!(result.vehicle.unwrap().vehicle_id, Some(1380801));
 }

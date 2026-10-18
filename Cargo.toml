@@ -1,9 +1,9 @@
 [package]
 name = "plateapi"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 authors = ["WolfStack Solutions"]
-description = "Rust SDK for PlateAPI -- Australian vehicle registration plate lookup"
+description = "Rust SDK for PlateAPI -- Australian vehicle registration plate lookup and vehicle database"
 license = "MIT"
 repository = "https://github.com/PlateAPI/plateapi-rust"
 readme = "README.md"

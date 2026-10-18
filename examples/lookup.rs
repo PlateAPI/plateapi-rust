@@ -22,6 +22,19 @@ async fn main() {
                     println!("Year range: {}", v.year_range.as_deref().unwrap_or(""));
                     println!("Body: {}", v.body.as_deref().unwrap_or(""));
                     println!("Engine: {}", v.engine.as_deref().unwrap_or(""));
+                    println!("Match: {}", result.match_.as_deref().unwrap_or(""));
+                    if let Some(id) = v.vehicle_id {
+                        println!("Vehicle ID: {}", id);
+                        if let Ok(record) = client.vehicle_by_id(id).await {
+                            println!(
+                                "Record: {} {} {} ({})",
+                                record.make.as_deref().unwrap_or(""),
+                                record.model.as_deref().unwrap_or(""),
+                                record.year_range.as_deref().unwrap_or(""),
+                                record.detail.as_deref().unwrap_or("")
+                            );
+                        }
+                    }
                     if let Some(ms) = result.duration_ms {
                         println!("Duration: {:.1}ms", ms);
                     }

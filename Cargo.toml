@@ -2,7 +2,7 @@
 name = "plateapi"
 version = "0.2.0"
 edition = "2021"
-authors = ["WolfStack Solutions"]
+authors = ["PlateAPI Pty Ltd"]
 description = "Rust SDK for PlateAPI -- Australian vehicle registration plate lookup and vehicle database"
 license = "MIT"
 repository = "https://github.com/PlateAPI/plateapi-rust"
